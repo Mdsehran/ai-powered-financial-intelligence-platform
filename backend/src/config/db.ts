@@ -112,7 +112,7 @@ export async function initDB() {
 
   const existing = await pool.query(
     'SELECT * FROM users WHERE email=$1',
-    ['admin@test.com']
+    ['superadmin@test.com']
   );
 
   if (existing.rows.length === 0) {
@@ -121,7 +121,7 @@ export async function initDB() {
     await pool.query(
       `INSERT INTO users (email, password_hash, role)
        VALUES ($1, $2, $3)`,
-      ['admin@test.com', hash, 'admin']
+      ['superadmin@test.com', hash, 'admin']
     );
 
     console.log('✅ Default admin user created');
