@@ -1,9 +1,31 @@
 import { useQuery } from '@tanstack/react-query'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, Cell, RadarChart,
+  PolarGrid, PolarAngleAxis, Radar
+} from 'recharts'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import Layout from '../components/Layout'
 
-const COLORS = ['#1e3a5f','#2563eb','#0ea5e9','#6366f1','#8b5cf6','#ec4899']
+const GOLD_GRADIENT = ['#c9a84c','#e2c06a','#f0d98a','#c9a84c','#a8893a']
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{
+      background: 'var(--surface-3)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '10px 14px', fontSize: 13
+    }}>
+      <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.name} style={{ color: 'var(--gold-400)', fontFamily: 'var(--font-mono)' }}>
+          {Number(p.value).toFixed(1)}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function Analytics() {
   const { data, isLoading } = useQuery({
@@ -11,92 +33,179 @@ export default function Analytics() {
     queryFn: () => api.get('/analytics/overview').then(r => r.data)
   })
 
-  if (isLoading) return <Layout><p style={{ color: '#64748b' }}>Loading...</p></Layout>
+  if (isLoading) return (
+    <Layout>
+      <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 32, marginBottom: 12, animation: 'pulse 1.5s infinite' }}>◈</div>
+        Loading analytics...
+      </div>
+    </Layout>
+  )
 
   const { sectors = [], rankings = [], sentiments = [] } = data || {}
 
+  const bullish  = sentiments.find((s: any) => s.group === 'Bullish')?.count  || 0
+  const neutral  = sentiments.find((s: any) => s.group === 'Neutral')?.count  || 0
+  const cautious = sentiments.find((s: any) => s.group === 'Cautious')?.count || 0
+  const total    = Number(bullish) + Number(neutral) + Number(cautious) || 1
+
   return (
     <Layout>
-      <h1 style={{ fontSize: 24, color: '#1e3a5f', marginBottom: 24 }}>Analytics</h1>
-
-      {/* Sentiment Buckets */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 28 }}>
-        {[{g:'Bullish',c:'#166534',bg:'#dcfce7'},{g:'Neutral',c:'#854d0e',bg:'#fef9c3'},{g:'Cautious',c:'#991b1b',bg:'#fee2e2'}].map(({g,c,bg}) => {
-          const s = sentiments.find((x: any) => x.group === g)
-          return (
-            <div key={g} style={{ background: bg, borderRadius: 10, padding: '20px', textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: c, textTransform: 'uppercase', letterSpacing: '.07em' }}>{g}</div>
-              <div style={{ fontSize: 36, fontWeight: 700, color: c }}>{s?.count || 0}</div>
-              <div style={{ fontSize: 12, color: c, opacity: .7 }}>companies</div>
-            </div>
-          )
-        })}
+      <div className="top-bar">
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>Analytics</h1>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {sectors.length} sectors · {rankings.length} ranked companies
+        </span>
       </div>
 
-      {/* Sector Chart */}
-      {sectors.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 20, marginBottom: 24 }}>
-          <div style={{ fontWeight: 600, color: '#1e3a5f', marginBottom: 16 }}>Avg Investment Score by Sector</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={sectors} margin={{ top: 0, right: 20, bottom: 0, left: 0 }}>
-              <XAxis dataKey="sector" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} domain={[0, 100]} />
-              <Tooltip formatter={(v: any) => Number(v).toFixed(1)} />
-              <Bar dataKey="avg_score" radius={[4,4,0,0]}>
-                {sectors.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <div className="page-content">
 
-      {/* Sector Table */}
-      {sectors.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#1e3a5f' }}>Sector Summary</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc' }}>
-                {['Sector','Companies','Avg Score','Avg Growth','Avg PAT Margin'].map(h => (
-                  <th key={h} style={{ padding: '8px 14px', textAlign: h === 'Sector' ? 'left' : 'right', color: '#64748b', fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sectors.map((s: any) => (
-                <tr key={s.sector} style={{ borderTop: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '8px 14px', fontWeight: 500 }}>{s.sector || 'N/A'}</td>
-                  <td style={{ padding: '8px 14px', textAlign: 'right' }}>{s.company_count}</td>
-                  <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 600, color: '#1e3a5f' }}>{s.avg_score ?? '—'}</td>
-                  <td style={{ padding: '8px 14px', textAlign: 'right' }}>{s.avg_growth != null ? `${s.avg_growth}%` : '—'}</td>
-                  <td style={{ padding: '8px 14px', textAlign: 'right' }}>{s.avg_pat_margin != null ? `${s.avg_pat_margin}%` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Rankings */}
-      {rankings.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#1e3a5f' }}>Top 10 Companies by Score</div>
-          {rankings.map((c: any, i: number) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none' }}>
-              <span style={{ width: 28, color: '#94a3b8', fontSize: 13 }}>#{i + 1}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>{c.sector}</div>
+        {/* Sentiment buckets */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
+          {[
+            { label: 'Bullish',  count: bullish,  pct: Math.round(bullish/total*100),  color: '#10b981', dim: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.2)',  icon: '▲' },
+            { label: 'Neutral',  count: neutral,  pct: Math.round(neutral/total*100),  color: '#f59e0b', dim: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.2)',  icon: '◆' },
+            { label: 'Cautious', count: cautious, pct: Math.round(cautious/total*100), color: '#ef4444', dim: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.2)',   icon: '▼' },
+          ].map(s => (
+            <div key={s.label} style={{
+              background: s.dim, border: `1px solid ${s.border}`,
+              borderRadius: 'var(--radius-lg)', padding: '20px 24px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: s.color, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize: 40, fontWeight: 700, fontFamily: 'var(--font-mono)', color: s.color, lineHeight: 1 }}>
+                    {s.count}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>companies</div>
+                </div>
+                <div style={{
+                  width: 44, height: 44, borderRadius: '50%',
+                  background: `rgba(${s.color === '#10b981' ? '16,185,129' : s.color === '#f59e0b' ? '245,158,11' : '239,68,68'},.15)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 18, color: s.color
+                }}>{s.icon}</div>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#1e3a5f' }}>{Number(c.overall_score).toFixed(0)}</div>
+              <div style={{ marginTop: 14, background: 'rgba(0,0,0,0.2)', borderRadius: 4, height: 4 }}>
+                <div style={{ height: '100%', borderRadius: 4, background: s.color, width: `${s.pct}%`, transition: 'width 0.6s ease' }} />
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{s.pct}% of portfolio</div>
             </div>
           ))}
         </div>
-      )}
 
-      {sectors.length === 0 && rankings.length === 0 && (
-        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '3rem' }}>No data yet. Add companies and upload financials first.</p>
-      )}
+        {/* Charts row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+
+          {/* Bar chart */}
+          <div className="card">
+            <div className="section-header">
+              <span className="section-title">Avg Score by Sector</span>
+            </div>
+            <div style={{ padding: '20px' }}>
+              {sectors.length === 0
+                ? <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '20px' }}>No sector data yet</p>
+                : (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={sectors} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                      <XAxis dataKey="sector" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0,100]} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="avg_score" radius={[4,4,0,0]}>
+                        {sectors.map((_: any, i: number) => (
+                          <Cell key={i} fill={GOLD_GRADIENT[i % GOLD_GRADIENT.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )
+              }
+            </div>
+          </div>
+
+          {/* Sector metrics table */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div className="section-header">
+              <span className="section-title">Sector Breakdown</span>
+            </div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Sector</th>
+                  <th>Cos</th>
+                  <th>Avg Score</th>
+                  <th>Growth</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sectors.length === 0
+                  ? <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>No data</td></tr>
+                  : sectors.map((s: any) => (
+                    <tr key={s.sector}>
+                      <td>{s.sector || 'N/A'}</td>
+                      <td>{s.company_count}</td>
+                      <td style={{ color: 'var(--gold-400)', fontWeight: 600 }}>{s.avg_score ?? '—'}</td>
+                      <td style={{ color: Number(s.avg_growth) > 0 ? '#34d399' : '#f87171' }}>
+                        {s.avg_growth != null ? `${s.avg_growth}%` : '—'}
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Rankings */}
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div className="section-header">
+            <span className="section-title">Top Companies by Investment Score</span>
+          </div>
+          {rankings.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: 13 }}>
+              Upload financial data for companies to see rankings.
+            </div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ paddingLeft: 20 }}>#</th>
+                  <th style={{ textAlign: 'left' }}>Company</th>
+                  <th>Sector</th>
+                  <th style={{ paddingRight: 20 }}>Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankings.map((c: any, i: number) => (
+                  <tr key={c.id}>
+                    <td style={{ paddingLeft: 20, color: i < 3 ? 'var(--gold-400)' : 'var(--text-muted)', fontWeight: i < 3 ? 700 : 400 }}>
+                      {i < 3 ? ['①','②','③'][i] : `#${i+1}`}
+                    </td>
+                    <td>
+                      <Link to={`/companies/${c.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 500 }}>
+                        {c.name}
+                      </Link>
+                    </td>
+                    <td>
+                      <span style={{ background: 'var(--surface-3)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 4, fontSize: 12 }}>
+                        {c.sector || '—'}
+                      </span>
+                    </td>
+                    <td style={{ paddingRight: 20 }}>
+                      <span className={`score-pill ${Number(c.overall_score) >= 70 ? 'score-bull' : Number(c.overall_score) >= 40 ? 'score-neut' : 'score-bear'}`}>
+                        {Number(c.overall_score).toFixed(0)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+      </div>
     </Layout>
   )
 }
