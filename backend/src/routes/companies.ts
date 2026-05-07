@@ -220,14 +220,12 @@ router.post('/:id/ai-summary', authenticate, requireRole('admin', 'analyst'), as
 
     res.json(result.rows[0]);
   } catch (err: any) {
-    const msg =
-      err.message === 'OLLAMA_TIMEOUT'
-        ? 'AI service timed out — try again'
-        : err.message.includes('OLLAMA_FAILURE')
-        ? 'Ollama is not running. Start it with: ollama serve'
-        : `AI generation failed: ${err.message}`;
-    res.status(503).json({ error: msg });
-  }
+  const msg =
+    err.message === 'OLLAMA_TIMEOUT'
+      ? 'AI service timed out — try again'
+      : `AI generation failed: ${err.message}`;
+  res.status(503).json({ error: msg });
+}
 });
 
 // ── Approve AI summary (admin only) ───────────────────────────────────────
