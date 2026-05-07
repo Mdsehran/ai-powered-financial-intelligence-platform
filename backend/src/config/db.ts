@@ -1,14 +1,20 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  (process.env.DATABASE_URL || '').includes('render.com') ||
+  (process.env.DATABASE_URL || '').includes('neon.tech');
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: isProduction
+    ? {
+        rejectUnauthorized: false,
+      }
+    : false,
 });
 
 export async function initDB() {
@@ -17,7 +23,8 @@ export async function initDB() {
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(20) DEFAULT 'viewer' CHECK (role IN ('admin','analyst','viewer')),
+      role VARCHAR(20) DEFAULT 'viewer'
+        CHECK (role IN ('admin','analyst','viewer')),
       created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -62,7 +69,8 @@ export async function initDB() {
       company_id INT REFERENCES companies(id) ON DELETE CASCADE,
       author_id INT REFERENCES users(id),
       content TEXT NOT NULL,
-      sentiment VARCHAR(20) DEFAULT 'neutral' CHECK (sentiment IN ('positive','neutral','negative')),
+      sentiment VARCHAR(20) DEFAULT 'neutral'
+        CHECK (sentiment IN ('positive','neutral','negative')),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -83,7 +91,8 @@ export async function initDB() {
       content TEXT,
       model_name VARCHAR(100),
       prompt_version VARCHAR(20),
-      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      status VARCHAR(20) DEFAULT 'pending'
+        CHECK (status IN ('pending','approved','rejected')),
       approved_by INT REFERENCES users(id),
       generated_at TIMESTAMP DEFAULT NOW()
     );
@@ -101,7 +110,8 @@ export async function initDB() {
 
     CREATE TABLE IF NOT EXISTS company_briefs (
       id SERIAL PRIMARY KEY,
-      company_id INT REFERENCES companies(id) ON DELETE CASCADE UNIQUE,
+      company_id INT REFERENCES companies(id)
+        ON DELETE CASCADE UNIQUE,
       content TEXT,
       generated_by INT REFERENCES users(id),
       generated_at TIMESTAMP DEFAULT NOW()
@@ -109,21 +119,4 @@ export async function initDB() {
   `);
 
   console.log('✅ DB tables ready');
-
-  const existing = await pool.query(
-    'SELECT * FROM users WHERE email=$1',
-    ['superadmin@test.com']
-  );
-
-  if (existing.rows.length === 0) {
-    const hash = await bcrypt.hash('admin123', 10);
-
-    await pool.query(
-      `INSERT INTO users (email, password_hash, role)
-       VALUES ($1, $2, $3)`,
-      ['superadmin@test.com', hash, 'admin']
-    );
-
-    console.log('✅ Default admin user created');
-  }
 }
